@@ -77,7 +77,8 @@ def load_all():
     cfg["ntfy"].setdefault("server", "https://ntfy.sh")
     if not cfg.get("adminKey"):
         cfg["adminKey"] = secrets.token_hex(6)                        # needed to change alerts from any device
-    cfg.setdefault("appUrl", "")                                      # optional: link opened when a push is tapped
+    cfg.setdefault("appUrl", "")      # the deployed app: link on pushes, and where web push is sent
+    cfg.setdefault("pushKey", "")     # shared secret for the deployed app's /api/push
     cfg["notify"] = {**DEFAULT_NOTIFY, **cfg.get("notify", {})}
     if json.dumps(cfg, sort_keys=True) != before:
         write_json(CONFIG_FILE, cfg)
@@ -235,7 +236,10 @@ def notify_change(prev, rec):
     if s:
         body += "\nToday's best %s at %s." % (fmt_inr(s[0]), fmt_local(s[1]))
     ok, info = ntfy_send(title, body, tags="chart_with_downwards_trend" if d < 0 else "chart_with_upwards_trend")
-    log("change push -> " + info)
+    log("ntfy push -> " + info)
+    import icici  # shared with poll.py
+    ok, info = icici.web_push(state["config"].get("appUrl"), state["config"].get("pushKey"), title, body)
+    log("web push  -> " + info)
 
 
 def hourly_update():

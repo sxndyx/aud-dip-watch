@@ -178,7 +178,8 @@ def ntfy_send(cfg, title, body, priority="default", tags="bell", click=None):
         return False, "%s: %s" % (type(e).__name__, e)
 
 
-def notify_change(cfg, prev, rec, history, click=None):
+def change_message(prev, rec, history):
+    """(title, body) for a rate change — the same words on every channel."""
     d = rec["ttSell"] - prev[1]
     arrow = "▼" if d < 0 else "▲"
     title = "ICICI AUD %s %.2f INR" % ("down to" if d < 0 else "up to", rec["ttSell"])
@@ -186,7 +187,27 @@ def notify_change(cfg, prev, rec, history, click=None):
     s = today_summary(history)
     if s:
         body += "\nToday's best %s at %s." % (fmt_inr(s[0]), fmt_local(s[1]))
-    return ntfy_send(cfg, title, body, tags="chart_with_downwards_trend" if d < 0 else "chart_with_upwards_trend", click=click)
+    return title, body
+
+
+def web_push(app_url, push_key, title, body, tag="rate"):
+    """Ask the app's own /api/push to notify every phone registered in the web app."""
+    if not app_url or not push_key:
+        return False, "not configured"
+    payload = json.dumps({"title": title, "body": body, "tag": tag}).encode("utf-8")
+    req = urllib.request.Request(app_url.rstrip("/") + "/api/push", data=payload, method="POST",
+                                 headers={"Content-Type": "application/json", "X-Push-Key": push_key, "User-Agent": UA})
+    try:
+        with urllib.request.urlopen(req, timeout=25, context=SSL_CTX) as r:
+            return True, "sent to %s phone(s)" % json.loads(r.read().decode()).get("sent", "?")
+    except Exception as e:
+        return False, "%s: %s" % (type(e).__name__, e)
+
+
+def notify_change(cfg, prev, rec, history, click=None):
+    title, body = change_message(prev, rec, history)
+    down = rec["ttSell"] < prev[1]
+    return ntfy_send(cfg, title, body, tags="chart_with_downwards_trend" if down else "chart_with_upwards_trend", click=click)
 
 
 def hourly_body(rec, history):

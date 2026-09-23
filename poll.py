@@ -7,7 +7,8 @@ evaluates the range alerts in alerts.json. Writes files back so the workflow can
 Environment:
   NTFY_TOPIC    (required to push)  the ntfy topic — keep it in GitHub Secrets
   NTFY_SERVER   (default https://ntfy.sh)
-  APP_URL       (optional)          link a push opens when tapped
+  APP_URL       (optional)          the deployed app: link on pushes, and where web push is sent
+  PUSH_KEY      (optional)          shared secret for the app's /api/push (web app notifications)
   HOURLY        (optional)          set to "1" by the hourly workflow run
 
 Exit code is 0 unless ICICI could not be read, so a failed run is visible in Actions.
@@ -50,7 +51,10 @@ def main():
         icici.write_json(RATE_FILE, store)
         if prev is not None and prev[1] != rec["ttSell"] and settings["changes"]:
             ok, info = icici.notify_change(cfg, prev, rec, store["history"], click=click)
-            print("change push -> " + info)
+            print("ntfy push -> " + info)
+            title, body = icici.change_message(prev, rec, store["history"])
+            ok, info = icici.web_push(click, os.environ.get("PUSH_KEY", "").strip(), title, body)
+            print("web push  -> " + info)
 
     if os.environ.get("HOURLY") == "1" and settings["hourly"]:
         ok, info = icici.ntfy_send(cfg, "Hourly: ICICI AUD %.2f INR" % rec["ttSell"],

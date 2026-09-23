@@ -228,8 +228,17 @@ h2{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-
       <div class="prow"><div><div class="t">Hourly update</div><div class="d" id="hourlyDesc">On the hour, 07:00–22:00.</div></div><label class="sw"><input type="checkbox" id="swHourly" aria-label="Hourly update push"></label></div>
     </div>
 
+    <div class="box" id="pushBox" hidden>
+      <div class="lbl">Notifications on this phone</div>
+      <p id="pushWhy">Get a notification here whenever ICICI changes the rate — no app to install. Works with the browser closed.</p>
+      <div class="topic">
+        <button class="btn" id="pushBtn" type="button" style="height:40px">Turn on notifications</button>
+        <button class="link" id="pushTest" type="button" hidden>Send a test</button>
+      </div>
+      <div class="note" id="pushStatus"></div>
+    </div>
     <div class="box" id="ntfyBox" hidden>
-      <div class="lbl">Get the pushes on a phone</div>
+      <div class="lbl">Or use the ntfy app</div>
       <p>Install the free <b>ntfy</b> app (App Store / Play Store), tap <b>+</b> and subscribe to this topic — on as many phones as you like. Everyone subscribed gets every push.</p>
       <div class="topic"><code id="ntfyTopic"></code><button class="link" id="copyTopic" type="button">Copy</button><button class="link" id="ntfyTest" type="button">Send test</button></div>
       <div class="note" id="ntfyStatus"></div>
@@ -498,6 +507,68 @@ $('#ntfyTest').addEventListener('click', async () => {
   catch (e) { $('#ntfyStatus').textContent = e.message === 'unauthorized' ? 'Key not accepted.' : 'Could not reach the server.'; }
 });
 
+// ---------- web push: this browser asks Google's push service to wake it when the rate moves
+const VAPID_PUBLIC = 'BJS_14DgyqrwJI22vxvpWmgTT_QU-UB0hS9hpmE0xCNv81ifCdXiN4htUOoRgjfED1bNNogLfRc15pupuO1i_5I';
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && location.protocol === 'https:';
+function b64ToBytes(b64){
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+let swReg = null;
+async function initPush(){
+  const box = $('#pushBox');
+  if (!pushSupported()) {
+    // http:// (the Mac's own address) can't register a service worker — that's a browser rule, not a bug
+    box.hidden = !S.static; $('#pushBtn').hidden = true;
+    $('#pushStatus').textContent = location.protocol === 'https:' ? 'This browser does not support notifications.' : 'Open the app over https to turn on notifications.';
+    return;
+  }
+  box.hidden = false;
+  try { swReg = await navigator.serviceWorker.register('sw.js'); } catch { $('#pushStatus').textContent = 'Could not start the notification service.'; return; }
+  renderPush(await swReg.pushManager.getSubscription());
+}
+function renderPush(sub){
+  const on = !!sub, denied = Notification.permission === 'denied';
+  $('#pushBtn').textContent = on ? 'Turn off notifications' : 'Turn on notifications';
+  $('#pushBtn').hidden = denied;
+  $('#pushTest').hidden = !on;
+  $('#pushStatus').textContent = denied
+    ? 'Notifications are blocked for this site in your browser settings — allow them there, then reload.'
+    : on ? 'On for this phone. You’ll be told whenever ICICI changes the rate.' : '';
+  $('#pushWhy').hidden = on;
+}
+$('#pushBtn').addEventListener('click', async () => {
+  const st = $('#pushStatus');
+  try {
+    let sub = await swReg.pushManager.getSubscription();
+    if (sub) {
+      st.textContent = 'Turning off…';
+      await fetch('api/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub, unsubscribe: true }) });
+      await sub.unsubscribe();
+      renderPush(null); st.textContent = 'Off. This phone will not be notified.';
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { renderPush(null); return; }
+    st.textContent = 'Turning on…';
+    sub = await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID_PUBLIC) });
+    const r = await fetch('api/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub, label: navigator.userAgent.slice(0, 40) }) });
+    if (!r.ok) throw new Error('register ' + r.status);
+    renderPush(sub);
+  } catch (e) {
+    st.textContent = 'Could not turn notifications on: ' + e.message;
+  }
+});
+$('#pushTest').addEventListener('click', async () => {
+  $('#pushStatus').textContent = 'Sending…';
+  try {
+    const r = await fetch('api/test-push', { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    $('#pushStatus').textContent = r.ok ? 'Sent to ' + (j.sent ?? '?') + ' phone(s) — it should appear in a moment.' : 'Could not send (' + r.status + ').';
+  } catch { $('#pushStatus').textContent = 'Could not reach the server.'; }
+});
+
 // unit + range
 function setUnit(u){
   S.unit = u; LS.set('adw.unit', u);
@@ -641,6 +712,7 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
 (function init(){
   setUnit(S.unit); setRange(S.range);
   refresh();
+  initPush();
   setInterval(refresh, 20000);
   setInterval(renderLive, 1000);
   setInterval(() => { renderStats(); draw(); }, 60000);

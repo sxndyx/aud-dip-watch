@@ -1,0 +1,6 @@
+# local-only state: holds the admin key and the ntfy topic
+data/
+__pycache__/
+*.pyc
+.DS_Store
+.claude/

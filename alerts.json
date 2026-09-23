@@ -1,0 +1,9 @@
+{
+ "alerts": [],
+ "settings": {
+  "changes": true,
+  "hourly": false,
+  "activeFrom": 7,
+  "activeTo": 22
+ }
+}

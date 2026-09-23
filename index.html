@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F5F7F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1210" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="AUD Dip">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>AUD Dip Watch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#F5F7F4; --surface:#FFFFFF; --ink:#161D1A; --ink-2:#5B6763; --ink-3:#8A948F;
+  --line:#E3E7E3; --line-2:#CBD3CE; --field:#FFFFFF;
+  --accent:#C2611B; --accent-soft:rgba(194,97,27,.10);
+  --good:#1B8A55; --good-soft:rgba(27,138,85,.12);
+  --bad:#C2382E; --bad-soft:rgba(194,56,46,.12);
+  --warn:#B7791F; --focus:#2F6FE4;
+  --mono:"DM Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1210; --surface:#151816; --ink:#E8ECE9; --ink-2:#A6B0AB; --ink-3:#7D8782;
+    --line:#262B28; --line-2:#3A413D; --field:#1B1F1D;
+    --accent:#D9782F; --accent-soft:rgba(217,120,47,.14);
+    --good:#3FBF7F; --good-soft:rgba(63,191,127,.14);
+    --bad:#E5605A; --bad-soft:rgba(229,96,90,.14);
+    --warn:#D6A13A; --focus:#7AA2F7;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1210; --surface:#151816; --ink:#E8ECE9; --ink-2:#A6B0AB; --ink-3:#7D8782;
+  --line:#262B28; --line-2:#3A413D; --field:#1B1F1D;
+  --accent:#D9782F; --accent-soft:rgba(217,120,47,.14);
+  --good:#3FBF7F; --good-soft:rgba(63,191,127,.14);
+  --bad:#E5605A; --bad-soft:rgba(229,96,90,.14);
+  --warn:#D6A13A; --focus:#7AA2F7;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg)}
+body{margin:0;color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.45;padding-inline:16px;-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:6px}
+.wrap{max-width:520px;margin:0 auto;padding-block:14px 48px;display:flex;flex-direction:column;gap:26px}
+
+/* header */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-weight:600;letter-spacing:-.01em;font-size:15px;white-space:nowrap}
+.live{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;font-family:var(--mono);font-size:11.5px;color:var(--ink-2);letter-spacing:.02em}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--ink-3);display:inline-block}
+.live.ok i{background:var(--good);animation:pulse 2s ease-out infinite}
+.live.warn i{background:var(--warn)}
+.live.bad i{background:var(--bad)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(27,138,85,.45)}100%{box-shadow:0 0 0 8px rgba(27,138,85,0)}}
+@media (prefers-reduced-motion: reduce){.live.ok i{animation:none}}
+
+/* hero */
+.hero{display:flex;flex-direction:column;gap:10px}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:999px;padding:2px;align-self:flex-start}
+.seg button{padding:5px 12px;border-radius:999px;font-size:12.5px;font-weight:500;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.rate{font-family:var(--mono);font-weight:500;font-size:clamp(46px,13vw,64px);line-height:1;letter-spacing:-.03em;transition:color .5s ease;margin-top:4px}
+.rate .sym{font-size:.5em;color:var(--ink-3);font-weight:400;letter-spacing:0;margin-right:.08em;vertical-align:.5em}
+.rate.good{color:var(--good);transition:none}
+.rate.bad{color:var(--bad);transition:none}
+.subs{display:flex;flex-direction:column;gap:3px}
+.sub{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13.5px;color:var(--ink-2)}
+.sub .good{color:var(--good)} .sub .bad{color:var(--bad)}
+.sub b{font-weight:500;font-family:var(--mono);font-size:13px}
+
+/* stats */
+.stats{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.stat{padding:14px 0;display:flex;flex-direction:column;gap:3px}
+.stat+.stat{border-left:1px solid var(--line);padding-left:18px}
+.lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:500}
+.val{font-family:var(--mono);font-size:24px;font-weight:500;letter-spacing:-.02em;line-height:1.15}
+.val .sym{font-size:.62em;color:var(--ink-3);font-weight:400;margin-right:.1em}
+.cap{font-size:12.5px;color:var(--ink-2);font-family:var(--mono)}
+
+/* chart */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 12px 8px;display:flex;flex-direction:column;gap:8px}
+.tabs{display:flex;gap:2px;align-items:center}
+.tabs button{font-family:var(--mono);font-size:12px;padding:5px 10px;border-radius:8px;color:var(--ink-2)}
+.tabs button[aria-pressed="true"]{background:var(--bg);color:var(--ink);font-weight:500}
+.series{margin-left:auto;font-size:11.5px;color:var(--ink-3);font-family:var(--mono);padding-right:4px}
+.chartwrap{position:relative;height:230px;max-width:100%}
+canvas{display:block;width:100%;height:100%;touch-action:pan-y;cursor:crosshair}
+.tip{position:absolute;top:2px;left:0;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:8px;padding:5px 8px;font-family:var(--mono);font-size:12px;line-height:1.3;white-space:nowrap}
+.tip b{display:block;font-weight:500;font-size:13px}
+
+/* converter */
+.conv{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
+.field{display:flex;align-items:center;gap:6px;border:1px solid var(--line-2);background:var(--field);border-radius:10px;padding:0 10px;height:48px;min-width:0}
+.field:focus-within{border-color:var(--ink-2)}
+.field span{color:var(--ink-3);font-family:var(--mono);font-size:13px;flex:none}
+.field input{flex:1;min-width:0;border:0;background:none;font-family:var(--mono);font-size:17px;padding:0;outline:none;text-align:right}
+.swap{color:var(--ink-3);font-size:18px;padding:6px}
+.note{font-size:12.5px;color:var(--ink-3)}
+h2{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:500;margin:0 0 10px}
+.sec{display:flex;flex-direction:column}
+
+/* alerts */
+.ahead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.ahead h2{margin:0}
+.tools{display:flex;align-items:center;gap:14px}
+.sw{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);cursor:pointer;user-select:none}
+.sw input{appearance:none;width:32px;height:18px;border-radius:999px;background:var(--line-2);position:relative;margin:0;transition:background .2s;flex:none;cursor:pointer}
+.sw input::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--surface);transition:transform .2s}
+.sw input:checked{background:var(--good)}
+.sw input:checked::after{transform:translateX(14px)}
+.link{font-size:12.5px;font-weight:500;color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+.alist{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.arow{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+.arow .rng{font-family:var(--mono);font-size:15px;flex:1;min-width:0}
+.chip{font-size:11px;letter-spacing:.04em;padding:3px 8px;border-radius:999px;background:var(--bg);color:var(--ink-2);border:1px solid var(--line);font-weight:500;white-space:nowrap}
+.chip.in{background:var(--good-soft);color:var(--good);border-color:transparent}
+.del{color:var(--ink-3);font-size:18px;line-height:1;padding:4px 6px;border-radius:6px}
+.del:hover{color:var(--bad);background:var(--bad-soft)}
+.empty{padding:14px 0;color:var(--ink-3);font-size:13.5px;border-bottom:1px solid var(--line)}
+.add{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:12px;align-items:center}
+.add .field{height:44px}
+.add .field input{font-size:16px}
+.btn{height:44px;padding:0 16px;border-radius:10px;background:var(--ink);color:var(--bg);font-weight:600;font-size:14px}
+.btn:active{transform:translateY(1px)}
+.hint{margin-top:10px;font-size:12.5px;color:var(--ink-3)}
+.pushes{margin-top:18px;display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.prow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+.prow .t{font-size:14px} .prow .d{font-size:12.5px;color:var(--ink-3)}
+.box{margin-top:16px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);display:flex;flex-direction:column;gap:8px}
+.box p{margin:0;font-size:13px;color:var(--ink-2)}
+.box p b{font-weight:600;color:var(--ink)}
+.topic{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.topic code{font-family:var(--mono);font-size:14px;background:var(--bg);padding:6px 10px;border-radius:8px;user-select:all;word-break:break-all}
+@media (max-width:360px){.add{grid-template-columns:1fr 1fr}.add .btn{grid-column:1/-1}.field input{font-size:16px}}
+
+/* toast + footer */
+.toast{position:fixed;left:16px;right:16px;top:calc(env(safe-area-inset-top,0px) + 12px);margin:0 auto;max-width:488px;background:var(--good);color:#fff;border-radius:12px;padding:12px 14px;font-size:14px;box-shadow:0 8px 28px rgba(0,0,0,.18);display:flex;gap:10px;align-items:flex-start;z-index:10;cursor:pointer}
+.toast b{font-family:var(--mono);font-weight:500}
+.foot{font-size:12px;color:var(--ink-3);line-height:1.5;border-top:1px solid var(--line);padding-top:14px}
+.foot b{font-weight:500;color:var(--ink-2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">AUD Dip Watch</div>
+    <div class="live" id="live"><i></i><span id="liveTxt">connecting</span></div>
+  </header>
+
+  <section class="hero">
+    <div class="seg" role="group" aria-label="Rate direction">
+      <button id="uINR" aria-pressed="true">₹ per A$1</button>
+      <button id="uAUD" aria-pressed="false">A$ per ₹1</button>
+    </div>
+    <div class="rate" id="rate" aria-live="polite">—</div>
+    <div class="subs">
+      <div class="sub"><span id="srcLine"></span></div>
+      <div class="sub"><span id="delta"></span><span id="offBest"></span></div>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="stat">
+      <div class="lbl">Best today</div>
+      <div class="val" id="bestDay">—</div>
+      <div class="cap" id="bestDayCap"></div>
+    </div>
+    <div class="stat">
+      <div class="lbl">Best this hour</div>
+      <div class="val" id="bestHr">—</div>
+      <div class="cap" id="bestHrCap"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="tabs" role="group" aria-label="Chart range">
+      <button data-r="1D">1D</button><button data-r="1W">1W</button><button data-r="1M">1M</button><button data-r="1Y">1Y</button>
+      <span class="series">ICICI TT selling</span>
+    </div>
+    <div class="chartwrap" id="chartWrap">
+      <canvas id="chart" aria-label="ICICI rate over time"></canvas>
+      <div class="tip" id="tip" hidden></div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2>Convert</h2>
+    <div class="conv">
+      <label class="field"><span>₹</span><input id="inr" type="text" inputmode="decimal" autocomplete="off" aria-label="Indian rupees"></label>
+      <div class="swap" aria-hidden="true">⇄</div>
+      <label class="field"><span>A$</span><input id="aud" type="text" inputmode="decimal" autocomplete="off" aria-label="Australian dollars"></label>
+    </div>
+    <div class="note" style="margin-top:8px">At ICICI's TT selling rate — what an outward transfer is priced at. Transfer fee, GST and TCS not included.</div>
+  </section>
+
+  <section class="sec">
+    <div class="ahead">
+      <h2>Alerts</h2>
+      <div class="tools">
+        <label class="sw"><input type="checkbox" id="sound"><span>Sound</span></label>
+        <button class="link" id="lockBtn" type="button" hidden>Unlock editing</button>
+      </div>
+    </div>
+    <div class="alist" id="alist"></div>
+    <form class="add" id="addForm" autocomplete="off">
+      <label class="field"><span id="fromSym">₹</span><input id="from" type="text" inputmode="decimal" placeholder="any" aria-label="Range from"></label>
+      <label class="field"><span id="toSym">₹</span><input id="to" type="text" inputmode="decimal" placeholder="" aria-label="Range to"></label>
+      <button class="btn" type="submit">Add alert</button>
+    </form>
+    <div class="hint" id="editNote" hidden>This published copy is read-only. Alerts are edited in <code>alerts.json</code> in the GitHub repo (or on the Mac itself); pushes keep working either way.</div>
+    <div class="hint">Range alerts fire the moment ICICI's rate moves into the range, re-arm when it leaves, and go to every subscribed phone — this page doesn't need to stay open.</div>
+
+    <div class="pushes">
+      <div class="prow"><div><div class="t">Every rate change</div><div class="d">A push each time ICICI re-prices, with the move.</div></div><label class="sw"><input type="checkbox" id="swChanges" aria-label="Push on every rate change"></label></div>
+      <div class="prow"><div><div class="t">Hourly update</div><div class="d" id="hourlyDesc">On the hour, 07:00–22:00.</div></div><label class="sw"><input type="checkbox" id="swHourly" aria-label="Hourly update push"></label></div>
+    </div>
+
+    <div class="box" id="ntfyBox" hidden>
+      <div class="lbl">Get the pushes on a phone</div>
+      <p>Install the free <b>ntfy</b> app (App Store / Play Store), tap <b>+</b> and subscribe to this topic — on as many phones as you like. Everyone subscribed gets every push.</p>
+      <div class="topic"><code id="ntfyTopic"></code><button class="link" id="copyTopic" type="button">Copy</button><button class="link" id="ntfyTest" type="button">Send test</button></div>
+      <div class="note" id="ntfyStatus"></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <b>Source:</b> ICICI Bank's published forex card rate — AUD <b>TT selling</b>, the rate an outward INR→AUD transfer is priced at — read from icici.bank.in every 5 minutes. Your Money2World quote at transaction time may differ slightly. Indicative, not a quote.
+  </footer>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const LS = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k){ try { localStorage.removeItem(k); } catch {} }
+};
+
+// ---------- state (rates are INR per 1 AUD; lower = better when sending INR -> AUD)
+const S = {
+  rate: null, ts: 0, fetchedAt: 0, error: null, history: [],   // from the server
+  alerts: [], settings: {}, ntfy: null, canEdit: false,
+  online: null, lastSeen: 0, static: false,
+  key: LS.get('adw.key', ''),
+  unit: LS.get('adw.unit', 'INR'),
+  range: LS.get('adw.range', '1D'),
+  sound: LS.get('adw.sound', true),
+  amount: LS.get('adw.amount', { cur: 'INR', val: 100000 }),
+};
+
+// ---------- helpers
+const disp = v => S.unit === 'INR' ? v : 1 / v;
+const DEC = () => S.unit === 'INR' ? 2 : 5;
+const SYM = () => S.unit === 'INR' ? '₹' : 'A$';
+const pad = n => String(n).padStart(2, '0');
+const hhmm = t => { const d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const hhmmIST = t => new Date(t).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' });
+const startOfLocalDay = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const fmtV = v => SYM() + disp(v).toFixed(DEC());
+function trimFixed(x, d){ let s = x.toFixed(d); if (s.includes('.')) s = s.replace(/0+$/, '').replace(/\.$/, ''); if ((s.split('.')[1] || '').length < 2) s = x.toFixed(2); return s; }
+function setVal(el, v){ el.replaceChildren(); if (v == null) { el.textContent = '—'; return; } const s = document.createElement('span'); s.className = 'sym'; s.textContent = SYM(); el.append(s, document.createTextNode(disp(v).toFixed(DEC()))); }
+// the rate in force since t0, every change after it, then now: [[t, rate, setAt], ...]
+function seriesSince(t0){
+  let before = null; const out = [];
+  for (const p of S.history) { if (p[0] < t0) before = p; else out.push([p[0], p[1], p[0]]); }
+  if (before) out.unshift([t0, before[1], before[0]]);
+  if (S.rate) { const last = out[out.length - 1];
+    if (!last) out.push([Date.now(), S.rate, S.ts]);
+    else if (last[1] !== S.rate) out.push([Date.now(), S.rate, S.ts]);
+    else if (last[0] < Date.now()) out.push([Date.now(), S.rate, last[2]]);   // hold the line to the right edge
+  }
+  return out;
+}
+function bestSince(t0){ let b = null; for (const p of seriesSince(t0)) if (!b || p[1] < b[1]) b = p; return b; }
+
+// ---------- server
+async function api(method, path, body){
+  const headers = { 'Content-Type': 'application/json' };
+  if (S.key) headers['X-Admin-Key'] = S.key;
+  const r = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
+  if (r.status === 401) { S.key = ''; LS.del('adw.key'); S.canEdit = false; renderLock(); throw new Error('unauthorized'); }
+  if (!r.ok) throw new Error(path + ' ' + r.status);
+  return r.json();
+}
+let flashTimer = null;
+function applyState(j){
+  const ic = j.icici || {};
+  const prevRate = S.rate;
+  if (ic.latest && ic.latest.ttSell) { S.rate = +ic.latest.ttSell; S.ts = +ic.latest.t; }
+  S.fetchedAt = ic.fetchedAt || 0; S.error = ic.error || null;
+  S.history = (ic.history || []).map(p => [+p[0], +p[1]]);
+  const wasIn = new Map(S.alerts.map(a => [a.id, !!a.inRange]));
+  S.alerts = (j.alerts || []).map(a => Object.assign({}, a));
+  if (S.online) for (const a of S.alerts) if (a.on && a.inRange && wasIn.has(a.id) && !wasIn.get(a.id)) announce(a);
+  S.settings = j.settings || {}; S.ntfy = j.ntfy && j.ntfy.topic ? j.ntfy : null; S.canEdit = !!j.canEdit;
+  S.online = true; S.lastSeen = Date.now();
+  if (prevRate && S.rate !== prevRate) flash(S.rate < prevRate);
+  renderAll();
+}
+async function refresh(){
+  if (!S.static) {
+    try { applyState(await api('GET', 'api/state')); return; }
+    catch (e) { if (e.message === 'unauthorized') return; S.static = true; }   // no API here: read the files
+  }
+  try {
+    const [rate, alerts] = await Promise.all([
+      fetch('rate.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.json()),
+      fetch('alerts.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).catch(() => ({})),
+    ]);
+    applyState({ icici: { latest: rate.latest, history: rate.history, fetchedAt: rate.latest ? rate.latest.t : 0 },
+                 alerts: alerts.alerts || [], settings: alerts.settings || {}, canEdit: false });
+  } catch { S.online = false; renderAll(); }
+}
+async function write(method, path, body){
+  if (S.static) { alert('This is the published copy — it only shows the rate.\n\nAlerts are edited in the alerts.json file in the GitHub repo, or on the Mac at http://localhost:8765.'); return; }
+  if (!S.key && !(await askKey())) return;
+  try { applyState(await api(method, path, body)); }
+  catch (e) { if (e.message === 'unauthorized') alert('That key was not accepted. The server prints it at startup, and it is stored in data/config.json on the Mac.'); }
+}
+async function askKey(){
+  const k = prompt('Admin key — the server prints it at startup and keeps it in data/config.json on the Mac. Needed once per device to change alerts:');
+  if (!k) return false;
+  S.key = k.trim(); LS.set('adw.key', S.key);
+  return true;
+}
+
+// ---------- alerts in this page (the push itself is sent by the server via ntfy)
+function alertText(a){
+  let lo, hi;
+  if (S.unit === 'INR') { lo = a.low; hi = a.high; } else { lo = a.high == null ? null : 1 / a.high; hi = a.low == null ? null : 1 / a.low; }
+  const f = x => SYM() + trimFixed(x, DEC() === 2 ? 2 : 5);
+  if (lo != null && hi != null) return f(lo) + ' – ' + f(hi);
+  if (hi != null) return f(hi) + ' or below';
+  if (lo != null) return f(lo) + ' or above';
+  return 'any rate';
+}
+let toastEl = null, toastTimer = null;
+function toast(strong, msg){
+  if (toastEl) toastEl.remove();
+  toastEl = document.createElement('div'); toastEl.className = 'toast'; toastEl.setAttribute('role', 'status');
+  const b = document.createElement('b'); b.textContent = strong; toastEl.append(b, document.createTextNode(' ' + msg));
+  toastEl.onclick = () => { toastEl.remove(); toastEl = null; };
+  document.body.appendChild(toastEl);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { if (toastEl) { toastEl.remove(); toastEl = null; } }, 30000);
+}
+let actx = null;
+function unlockAudio(){ try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch {} }
+document.addEventListener('pointerdown', unlockAudio, { passive: true });
+function beep(){
+  if (!actx) return;
+  try {
+    const t = actx.currentTime;
+    [[880, 0], [1175, .16]].forEach(([f, dt]) => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(.0001, t + dt); g.gain.exponentialRampToValueAtTime(.25, t + dt + .02); g.gain.exponentialRampToValueAtTime(.0001, t + dt + .2);
+      o.connect(g).connect(actx.destination); o.start(t + dt); o.stop(t + dt + .22);
+    });
+  } catch {}
+}
+function announce(a){
+  toast('ICICI AUD ' + fmtV(S.rate), 'is in your alert range ' + alertText(a));
+  if (S.sound) beep();
+  try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch {}
+}
+
+// ---------- rendering
+const els = {
+  live: $('#live'), liveTxt: $('#liveTxt'), rate: $('#rate'), srcLine: $('#srcLine'), delta: $('#delta'), offBest: $('#offBest'),
+  bestDay: $('#bestDay'), bestDayCap: $('#bestDayCap'), bestHr: $('#bestHr'), bestHrCap: $('#bestHrCap'),
+  inr: $('#inr'), aud: $('#aud'), alist: $('#alist'), from: $('#from'), to: $('#to'), lockBtn: $('#lockBtn'),
+};
+function renderAll(){ renderLive(); renderHero(); renderStats(); renderConverter(); renderAlerts(); renderPushes(); renderLock(); draw(); }
+function renderLive(){
+  let cls = '', txt;
+  if (S.online === null) txt = 'connecting';
+  else if (!S.online) { cls = 'bad'; txt = 'server unreachable' + (S.lastSeen ? ' · last ' + hhmm(S.lastSeen) : ''); }
+  else if (S.error) { cls = 'warn'; txt = 'ICICI unreachable · last good rate shown'; }
+  else if (S.static) { cls = 'ok'; txt = S.ts ? 'rate set ' + hhmm(S.ts) : 'waiting for ICICI'; }
+  else { const age = S.fetchedAt ? (Date.now() - S.fetchedAt) / 1000 : null; cls = age != null && age < 12 * 60 ? 'ok' : 'warn'; txt = age == null ? 'waiting for ICICI' : 'checked ' + (age < 60 ? Math.max(0, Math.round(age)) + 's' : Math.round(age / 60) + ' min') + ' ago'; }
+  els.live.className = 'live ' + cls; els.liveTxt.textContent = txt;
+}
+function flash(good){ els.rate.classList.remove('good', 'bad'); void els.rate.offsetWidth; els.rate.classList.add(good ? 'good' : 'bad'); clearTimeout(flashTimer); flashTimer = setTimeout(() => els.rate.classList.remove('good', 'bad'), 900); }
+function renderHero(){
+  if (!S.rate) { els.rate.textContent = '—'; els.srcLine.textContent = S.online === false ? 'The server on the Mac isn’t reachable.' : ''; return; }
+  setVal(els.rate, S.rate);
+  document.title = fmtV(S.rate) + ' · AUD Dip Watch';
+  els.srcLine.textContent = 'ICICI TT selling · set ' + hhmm(S.ts) + ' (' + hhmmIST(S.ts) + ' IST)';
+  // move since the previous price ICICI published
+  els.delta.replaceChildren(); els.delta.className = '';
+  const H = S.history; let prev = null;
+  for (let i = H.length - 1; i >= 0; i--) if (H[i][1] !== S.rate) { prev = H[i]; break; }
+  if (prev) {
+    const dc = disp(S.rate) - disp(prev[1]), pct = dc / disp(prev[1]) * 100;
+    const b = document.createElement('b'); b.textContent = (dc >= 0 ? '▲ ' : '▼ ') + Math.abs(dc).toFixed(DEC()) + ' (' + Math.abs(pct).toFixed(2) + '%)';
+    els.delta.className = S.rate < prev[1] ? 'good' : 'bad';
+    els.delta.append(b, document.createTextNode(' from ' + fmtV(prev[1])));
+  }
+  const best = bestSince(startOfLocalDay());
+  els.offBest.replaceChildren(); els.offBest.className = '';
+  if (best) {
+    const off = (S.rate - best[1]) / best[1] * 100;
+    if (off < 0.005) { els.offBest.className = 'good'; els.offBest.textContent = '✓ at today’s best'; }
+    else { const b = document.createElement('b'); b.textContent = off.toFixed(2) + '%'; els.offBest.append(b, document.createTextNode(' above today’s best')); }
+  }
+}
+function renderStats(){
+  const bd = bestSince(startOfLocalDay()), bh = bestSince(Date.now() - 3600e3);
+  setVal(els.bestDay, bd ? bd[1] : null); els.bestDayCap.textContent = bd ? 'set ' + hhmm(bd[2]) : (S.online ? 'no rate yet' : '');
+  setVal(els.bestHr, bh ? bh[1] : null); els.bestHrCap.textContent = bh ? 'set ' + hhmm(bh[2]) : '';
+}
+// converter
+const parseNum = s => { const n = parseFloat(String(s).replace(/[^0-9.]/g, '')); return isFinite(n) ? n : null; };
+const fmtINR = n => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtAUD = n => n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function renderConverter(){
+  if (!S.rate || S.amount.val == null) return;
+  const inrFocus = document.activeElement === els.inr, audFocus = document.activeElement === els.aud;
+  if (S.amount.cur === 'INR') { if (!inrFocus) els.inr.value = fmtINR(S.amount.val); els.aud.value = fmtAUD(S.amount.val / S.rate); }
+  else { if (!audFocus) els.aud.value = fmtAUD(S.amount.val); els.inr.value = fmtINR(S.amount.val * S.rate); }
+}
+els.inr.addEventListener('input', () => { const v = parseNum(els.inr.value); S.amount = { cur: 'INR', val: v }; LS.set('adw.amount', S.amount); els.aud.value = v != null && S.rate ? fmtAUD(v / S.rate) : ''; });
+els.aud.addEventListener('input', () => { const v = parseNum(els.aud.value); S.amount = { cur: 'AUD', val: v }; LS.set('adw.amount', S.amount); els.inr.value = v != null && S.rate ? fmtINR(v * S.rate) : ''; });
+els.inr.addEventListener('blur', renderConverter); els.aud.addEventListener('blur', renderConverter);
+els.inr.addEventListener('focus', () => els.inr.select()); els.aud.addEventListener('focus', () => els.aud.select());
+
+// alerts UI
+function renderAlerts(){
+  const list = els.alist; list.replaceChildren();
+  if (!S.alerts.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = S.online ? 'No range alerts yet. Add one below.' : ''; list.append(e); }
+  for (const a of S.alerts) {
+    const row = document.createElement('div'); row.className = 'arow';
+    const rng = document.createElement('div'); rng.className = 'rng'; rng.textContent = alertText(a);
+    const chip = document.createElement('span'); chip.className = 'chip' + (a.on && a.inRange ? ' in' : '');
+    chip.textContent = !a.on ? 'Paused' : a.inRange ? 'In range now' : 'Watching';
+    const sw = document.createElement('label'); sw.className = 'sw'; sw.title = a.on ? 'Pause alert' : 'Resume alert';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!a.on; cb.setAttribute('aria-label', 'Alert on');
+    cb.addEventListener('change', () => { const on = cb.checked; cb.checked = !on; write('PUT', 'api/alerts/' + a.id, { on }); });
+    sw.append(cb);
+    const del = document.createElement('button'); del.className = 'del'; del.type = 'button'; del.textContent = '×'; del.setAttribute('aria-label', 'Delete alert');
+    del.addEventListener('click', () => write('DELETE', 'api/alerts/' + a.id));
+    row.append(rng, chip, sw, del); list.append(row);
+  }
+  $('#fromSym').textContent = SYM(); $('#toSym').textContent = SYM();
+  if (S.rate) { const d = disp(S.rate); els.to.placeholder = 'e.g. ' + (S.unit === 'INR' ? (d - 0.25).toFixed(2) : (d * 1.004).toFixed(5)); }
+}
+$('#addForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const A = parseNum(els.from.value), B = parseNum(els.to.value);
+  if ((A == null || A <= 0) && (B == null || B <= 0)) { els.to.focus(); return; }
+  let lo, hi;
+  if (S.unit === 'INR') { lo = A > 0 ? A : null; hi = B > 0 ? B : null; } else { lo = B > 0 ? 1 / B : null; hi = A > 0 ? 1 / A : null; }
+  if (lo != null && hi != null && lo > hi) [lo, hi] = [hi, lo];
+  els.from.value = ''; els.to.value = '';
+  write('POST', 'api/alerts', { low: lo, high: hi });
+});
+$('#sound').checked = !!S.sound;
+$('#sound').addEventListener('change', e => { S.sound = e.target.checked; LS.set('adw.sound', S.sound); if (S.sound) { unlockAudio(); beep(); } });
+function renderPushes(){
+  const n = S.settings || {};
+  $('#ntfyTest').hidden = S.static;
+  $('#addForm').hidden = S.static;
+  $('#editNote').hidden = !S.static;
+  $('#swChanges').checked = !!n.changes; $('#swHourly').checked = !!n.hourly;
+  if (n.activeFrom != null) $('#hourlyDesc').textContent = 'On the hour, ' + pad(n.activeFrom) + ':00–' + pad(n.activeTo) + ':00.';
+  const box = $('#ntfyBox'); box.hidden = !S.ntfy || S.static; if (S.ntfy) $('#ntfyTopic').textContent = S.ntfy.topic;
+}
+$('#swChanges').addEventListener('change', e => { const v = e.target.checked; e.target.checked = !v; write('PUT', 'api/settings', { changes: v }); });
+$('#swHourly').addEventListener('change', e => { const v = e.target.checked; e.target.checked = !v; write('PUT', 'api/settings', { hourly: v }); });
+function renderLock(){ els.lockBtn.hidden = S.static || !S.online || S.canEdit; }
+els.lockBtn.addEventListener('click', async () => { if (await askKey()) refresh(); });
+$('#copyTopic').addEventListener('click', async () => {
+  const t = S.ntfy && S.ntfy.topic; if (!t) return;
+  try { await navigator.clipboard.writeText(t); $('#ntfyStatus').textContent = 'Copied.'; }
+  catch { const r = document.createRange(); r.selectNodeContents($('#ntfyTopic')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); $('#ntfyStatus').textContent = 'Selected — copy it with the usual shortcut.'; }
+});
+$('#ntfyTest').addEventListener('click', async () => {
+  if (!S.key && !(await askKey())) return;
+  $('#ntfyStatus').textContent = 'Sending…';
+  try { const j = await api('POST', 'api/ntfy/test'); $('#ntfyStatus').textContent = j.ok ? 'Test sent — it should be on every subscribed phone now.' : 'Could not send: ' + (j.info || ''); }
+  catch (e) { $('#ntfyStatus').textContent = e.message === 'unauthorized' ? 'Key not accepted.' : 'Could not reach the server.'; }
+});
+
+// unit + range
+function setUnit(u){
+  S.unit = u; LS.set('adw.unit', u);
+  $('#uINR').setAttribute('aria-pressed', String(u === 'INR')); $('#uAUD').setAttribute('aria-pressed', String(u === 'AUD'));
+  els.from.value = ''; els.to.value = '';
+  renderAll();
+}
+$('#uINR').addEventListener('click', () => setUnit('INR'));
+$('#uAUD').addEventListener('click', () => setUnit('AUD'));
+function setRange(r){
+  S.range = r; LS.set('adw.range', r);
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.r === r)));
+  draw();
+}
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => setRange(b.dataset.r)));
+
+// ---------- chart: the card rate is piecewise constant, drawn as steps
+const cv = $('#chart'), ctx = cv.getContext('2d'), wrap = $('#chartWrap'), tip = $('#tip');
+let plot = null, hoverX = null;
+function seriesForRange(){
+  const now = Date.now(), days = { '1D': 0, '1W': 7, '1M': 31, '1Y': 365 }[S.range];
+  const t0 = S.range === '1D' ? startOfLocalDay() : now - days * 864e5;
+  const pts = seriesSince(t0);
+  return { pts, x0: pts.length ? pts[0][0] : t0, x1: now };
+}
+function niceTicks(lo, hi, n){
+  const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
+  const values = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-12; v += step) values.push(+v.toFixed(10));
+  const dec = Math.max(0, -Math.floor(Math.log10(step))) + (String(step).includes('.5') && step < 1 ? 1 : 0);
+  return { step, values, dec };
+}
+function xTicks(x0, x1, maxN){
+  const span = x1 - x0, out = [];
+  if (span <= 26 * 3600e3) {
+    const step = [5, 10, 15, 30, 60, 120, 180, 240, 360].map(m => m * 60e3).find(s => span / s <= maxN) || 360 * 60e3;
+    for (let t = Math.ceil(x0 / step) * step; t <= x1; t += step) out.push([t, hhmm(t)]);
+  } else if (span <= 45 * 864e5) {
+    const stepD = span <= 9 * 864e5 ? 1 : 7;
+    const d = new Date(x0); d.setHours(0, 0, 0, 0); if (d.getTime() < x0) d.setDate(d.getDate() + 1);
+    for (; d.getTime() <= x1; d.setDate(d.getDate() + stepD)) out.push([d.getTime(), stepD === 1 ? DAYS[d.getDay()] : d.getDate() + ' ' + MONTHS[d.getMonth()]]);
+    while (out.length > maxN) out.splice(1, 1);
+  } else {
+    const d = new Date(x0); d.setDate(1); d.setHours(0, 0, 0, 0); if (d.getTime() < x0) d.setMonth(d.getMonth() + 1);
+    const all = []; for (; d.getTime() <= x1; d.setMonth(d.getMonth() + 1)) all.push([d.getTime(), d.getMonth() === 0 ? 'Jan ' + String(d.getFullYear()).slice(2) : MONTHS[d.getMonth()]]);
+    const k = Math.max(1, Math.ceil(all.length / maxN)); all.forEach((p, i) => { if (i % k === 0) out.push(p); });
+  }
+  return out;
+}
+function dot(x, y, r, fill, ring){ ctx.beginPath(); ctx.arc(x, y, r + 2, 0, Math.PI * 2); ctx.fillStyle = ring; ctx.fill(); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill(); }
+function rrect(x, y, w, h, r){ ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function draw(){
+  const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim();
+  const dpr = window.devicePixelRatio || 1, W = wrap.clientWidth, H = wrap.clientHeight;
+  if (!W || !H) return;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  ctx.font = '11px ' + col('--mono');
+  const { pts, x0, x1 } = seriesForRange(); plot = null;
+  if (pts.length < 1 || x1 <= x0) {
+    ctx.fillStyle = col('--ink-3'); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(S.online === false ? 'Server unreachable' : 'Waiting for the first ICICI rate…', W / 2, H / 2);
+    tip.hidden = true; return;
+  }
+  const L = 6, R = W - 60, T = 18, B = H - 22;
+  const dv = pts.map(p => disp(p[1]));
+  let lo = Math.min(...dv), hi = Math.max(...dv);
+  if (hi - lo < lo * 2e-3) { const m = (hi + lo) / 2; hi = m * 1.002; lo = m * 0.998; }   // a flat day still gets a ±0.2% band
+  const total = (hi - lo) / (1 - 0.2 - 26 / (B - T)), pa = total * 0.1, pb = total * (26 / (B - T));
+  if (S.unit === 'INR') { lo -= pa + pb; hi += pa; } else { hi += pa + pb; lo -= pa; }
+  const xs = t => L + (t - x0) / (x1 - x0) * (R - L), ys = v => B - (v - lo) / (hi - lo) * (B - T);
+  const lastY = ys(dv[dv.length - 1]);
+  const tk = niceTicks(lo, hi, 4);
+  ctx.lineWidth = 1; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  for (const v of tk.values) {
+    const y = Math.round(ys(v)) + .5;
+    ctx.strokeStyle = col('--line'); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(R, y); ctx.stroke();
+    if (Math.abs(y - lastY) > 12) { ctx.fillStyle = col('--ink-3'); ctx.fillText(v.toFixed(tk.dec), R + 8, y); }
+  }
+  ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'center'; ctx.fillStyle = col('--ink-3');
+  for (const [t, label] of xTicks(x0, x1, Math.max(2, Math.floor((R - L) / 64)))) { const x = xs(t); if (x > L + 14 && x < R - 14) ctx.fillText(label, x, H - 6); }
+  // alert bands
+  for (const a of S.alerts) {
+    if (!a.on) continue;
+    let bl = a.low == null ? -Infinity : disp(a.low), bh = a.high == null ? Infinity : disp(a.high);
+    if (bl > bh) [bl, bh] = [bh, bl];
+    const yTop = ys(Math.min(bh, hi)), yBot = ys(Math.max(bl, lo));
+    if (yBot <= T || yTop >= B) continue;
+    ctx.fillStyle = col('--good-soft'); ctx.fillRect(L, yTop, R - L, yBot - yTop);
+    ctx.strokeStyle = col('--good'); ctx.setLineDash([3, 4]);
+    for (const e of [bh, bl]) if (isFinite(e) && e > lo && e < hi) { const y = Math.round(ys(e)) + .5; ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(R, y); ctx.stroke(); }
+    ctx.setLineDash([]);
+  }
+  // step path: hold each rate until the next change
+  const path = [];
+  pts.forEach((p, i) => { const x = xs(p[0]), y = ys(dv[i]); if (i) path.push([x, path[path.length - 1][1]]); path.push([x, y]); });
+  ctx.fillStyle = col('--accent-soft'); ctx.beginPath(); ctx.moveTo(path[0][0], B); path.forEach(([x, y]) => ctx.lineTo(x, y)); ctx.lineTo(path[path.length - 1][0], B); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = col('--accent'); ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.beginPath(); path.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+  // best (lowest ₹ per A$) and current
+  let bi = 0; for (let i = 1; i < pts.length; i++) if (pts[i][1] < pts[bi][1]) bi = i;
+  const bx = xs(pts[bi][0]), by = ys(dv[bi]);
+  dot(bx, by, 4, col('--good'), col('--surface'));
+  const bl = 'best ' + SYM() + dv[bi].toFixed(DEC()), bw = ctx.measureText(bl).width;
+  ctx.fillStyle = col('--ink-2'); ctx.textAlign = 'left';
+  const lx = Math.max(L + 2, Math.min(R - bw - 2, bx - bw / 2));
+  if (S.unit === 'INR' ? by + 22 < B : by - 22 > T) { ctx.textBaseline = 'top'; ctx.fillText(bl, lx, by + 9); } else { ctx.textBaseline = 'bottom'; ctx.fillText(bl, lx, by - 9); }
+  dot(xs(pts[pts.length - 1][0]), lastY, 4, col('--accent'), col('--surface'));
+  const ptxt = dv[dv.length - 1].toFixed(DEC()), pw = ctx.measureText(ptxt).width + 10, ph = 18, py = Math.max(T - 8, Math.min(B - ph + 4, lastY - ph / 2));
+  rrect(R + 4, py, pw, ph, 4); ctx.fillStyle = col('--accent'); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.fillText(ptxt, R + 9, py + ph / 2);
+  plot = { pts, dv, xs, ys, L, R, T, B, W, col, x0, x1 };
+  drawHover();
+}
+function drawHover(){
+  if (!plot || hoverX == null) { tip.hidden = true; return; }
+  const { pts, dv, xs, ys, L, R, T, B, W, col, x0, x1 } = plot;
+  const hx = Math.max(L, Math.min(R, hoverX));
+  let bi = 0; for (let i = 0; i < pts.length; i++) if (xs(pts[i][0]) <= hx) bi = i;   // the rate in force under the pointer
+  const x = Math.round(hx) + .5, y = ys(dv[bi]), tAt = x0 + (hx - L) / (R - L) * (x1 - x0);
+  ctx.strokeStyle = col('--line-2'); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, B); ctx.stroke();
+  dot(x, y, 4, col('--accent'), col('--surface'));
+  const d = new Date(tAt);
+  tip.replaceChildren();
+  const b = document.createElement('b'); b.textContent = SYM() + dv[bi].toFixed(DEC());
+  tip.append(b, document.createTextNode((S.range === '1D' ? '' : d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ') + hhmm(tAt) + ' · set ' + hhmm(pts[bi][2])));
+  tip.hidden = false;
+  const tw = tip.offsetWidth; tip.style.left = Math.max(0, Math.min(W - tw, x - tw / 2)) + 'px';
+}
+function onPointer(e){ const r = cv.getBoundingClientRect(); hoverX = e.clientX - r.left; draw(); }
+cv.addEventListener('pointermove', onPointer);
+cv.addEventListener('pointerdown', onPointer);
+cv.addEventListener('pointerleave', () => { hoverX = null; draw(); });
+cv.addEventListener('pointerup', () => { if (window.matchMedia('(hover: none)').matches) setTimeout(() => { hoverX = null; draw(); }, 1500); });
+new ResizeObserver(() => draw()).observe(wrap);
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+
+// ---------- boot
+(function init(){
+  setUnit(S.unit); setRange(S.range);
+  refresh();
+  setInterval(refresh, 20000);
+  setInterval(renderLive, 1000);
+  setInterval(() => { renderStats(); draw(); }, 60000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+})();
+})();
+</script>
+</body>
+</html>

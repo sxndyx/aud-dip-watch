@@ -1,0 +1,41 @@
+name: Poll ICICI rate
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'  # every 15 min, off the hour (GitHub delays on-the-hour runs most)
+    - cron: '52 * * * *'          # hourly slot: same poll, plus the hourly push when enabled
+  workflow_dispatch:              # lets you run it by hand from the Actions tab
+
+concurrency:
+  group: poll                     # never two runs at once - they would fight over the commit
+  cancel-in-progress: false
+
+permissions:
+  contents: write                 # to commit the rate history back to the repo
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Poll and notify
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_SERVER: ${{ vars.NTFY_SERVER }}
+          APP_URL: ${{ vars.APP_URL }}
+          HOURLY: ${{ github.event.schedule == '52 * * * *' && '1' || '0' }}
+        run: python poll.py
+      - name: Commit any change
+        run: |
+          if [ -n "$(git status --porcelain rate.json alerts.json)" ]; then
+            git config user.name  "aud-dip-watch"
+            git config user.email "actions@users.noreply.github.com"
+            git add rate.json alerts.json
+            git commit -m "rate: $(python -c "import json;print(json.load(open('rate.json'))['latest']['ttSell'])")"
+            git push
+          else
+            echo "nothing to commit"
+          fi

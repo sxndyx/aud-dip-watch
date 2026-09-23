@@ -1,0 +1,6 @@
+# only the page and its data are deployed; the poller runs on GitHub Actions
+*.py
+serve.command
+geturl.command
+.github/
+data/

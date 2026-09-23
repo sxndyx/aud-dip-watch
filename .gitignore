@@ -4,3 +4,9 @@ __pycache__/
 *.pyc
 .DS_Store
 .claude/
+.vercel
+.env*
+node_modules/
+.vercel/
+.env*.local
+package-lock.json.bak

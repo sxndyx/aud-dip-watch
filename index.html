@@ -89,6 +89,15 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .val{font-family:var(--mono);font-size:24px;font-weight:500;letter-spacing:-.02em;line-height:1.15}
 .val .sym{font-size:.62em;color:var(--ink-3);font-weight:400;margin-right:.1em}
 .cap{font-size:12.5px;color:var(--ink-2);font-family:var(--mono)}
+.ctx{font-size:13.5px;color:var(--ink-2);line-height:1.5;margin-top:-10px}
+.ctx b{font-weight:600;color:var(--ink)}
+.evs{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.ev{display:flex;align-items:baseline;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.ev .when{font-family:var(--mono);font-size:12.5px;color:var(--ink-3);flex:none;width:74px}
+.ev .nm{font-size:14px;flex:1;min-width:0}
+.ev .nm span{display:block;font-size:12.5px;color:var(--ink-3)}
+.ev .cur{font-size:11px;letter-spacing:.04em;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--ink-2);flex:none}
+.ev.soon .when{color:var(--accent);font-weight:500}
 
 /* chart */
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 12px 8px;display:flex;flex-direction:column;gap:8px}
@@ -174,16 +183,18 @@ h2{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-
 
   <section class="stats">
     <div class="stat">
-      <div class="lbl">Best today</div>
+      <div class="lbl">Best in 30 days</div>
       <div class="val" id="bestDay">—</div>
       <div class="cap" id="bestDayCap"></div>
     </div>
     <div class="stat">
-      <div class="lbl">Best this hour</div>
-      <div class="val" id="bestHr">—</div>
-      <div class="cap" id="bestHrCap"></div>
+      <div class="lbl">Next rate, est.</div>
+      <div class="val" id="nowcast">—</div>
+      <div class="cap" id="nowcastCap"></div>
     </div>
   </section>
+
+  <div class="ctx" id="ctx" hidden></div>
 
   <section class="card">
     <div class="tabs" role="group" aria-label="Chart range">
@@ -245,6 +256,12 @@ h2{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-
     </div>
   </section>
 
+  <section class="sec" id="eventsSec" hidden>
+    <h2>Dates that tend to move the rate</h2>
+    <div class="evs" id="evs"></div>
+    <div class="note" style="margin-top:10px">Published in advance by each central bank and statistics office. These mark when movement is <em>likely</em> — not which way it will go.</div>
+  </section>
+
   <footer class="foot">
     <b>Source:</b> ICICI Bank's published forex card rate — AUD <b>TT selling</b>, the rate an outward INR→AUD transfer is priced at — read from icici.bank.in every 5 minutes. Your Money2World quote at transaction time may differ slightly. Indicative, not a quote.
   </footer>
@@ -265,6 +282,7 @@ const S = {
   rate: null, ts: 0, fetchedAt: 0, error: null, history: [],   // from the server
   alerts: [], settings: {}, ntfy: null, canEdit: false,
   online: null, lastSeen: 0, static: false,
+  margin: null, mkt: null, mktAt: 0,   // ICICI's margin over the interbank market, and the live market rate
   key: LS.get('adw.key', ''),
   unit: LS.get('adw.unit', 'INR'),
   range: LS.get('adw.range', '1D'),
@@ -319,6 +337,7 @@ function applyState(j){
   S.alerts = (j.alerts || []).map(a => Object.assign({}, a));
   if (S.online) for (const a of S.alerts) if (a.on && a.inRange && wasIn.has(a.id) && !wasIn.get(a.id)) announce(a);
   S.settings = j.settings || {}; S.ntfy = j.ntfy && j.ntfy.topic ? j.ntfy : null; S.canEdit = !!j.canEdit;
+  if (j.margin) S.margin = j.margin;
   S.online = true; S.lastSeen = Date.now();
   if (prevRate && S.rate !== prevRate) flash(S.rate < prevRate);
   renderAll();
@@ -334,7 +353,7 @@ async function refresh(){
       fetch('alerts.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).catch(() => ({})),
     ]);
     applyState({ icici: { latest: rate.latest, history: rate.history, fetchedAt: rate.latest ? rate.latest.t : 0 },
-                 alerts: alerts.alerts || [], settings: alerts.settings || {}, canEdit: false });
+                 alerts: alerts.alerts || [], settings: alerts.settings || {}, canEdit: false, margin: rate.margin });
   } catch { S.online = false; renderAll(); }
 }
 async function write(method, path, body){
@@ -393,10 +412,10 @@ function announce(a){
 // ---------- rendering
 const els = {
   live: $('#live'), liveTxt: $('#liveTxt'), rate: $('#rate'), srcLine: $('#srcLine'), delta: $('#delta'), offBest: $('#offBest'),
-  bestDay: $('#bestDay'), bestDayCap: $('#bestDayCap'), bestHr: $('#bestHr'), bestHrCap: $('#bestHrCap'),
+  bestDay: $('#bestDay'), bestDayCap: $('#bestDayCap'), nowcast: $('#nowcast'), nowcastCap: $('#nowcastCap'), ctx: $('#ctx'),
   inr: $('#inr'), aud: $('#aud'), alist: $('#alist'), from: $('#from'), to: $('#to'), lockBtn: $('#lockBtn'),
 };
-function renderAll(){ renderLive(); renderHero(); renderStats(); renderConverter(); renderAlerts(); renderPushes(); renderLock(); draw(); }
+function renderAll(){ renderLive(); renderHero(); renderStats(); renderContext(); renderConverter(); renderAlerts(); renderPushes(); renderLock(); draw(); }
 function renderLive(){
   let cls = '', txt;
   if (S.online === null) txt = 'connecting';
@@ -422,18 +441,90 @@ function renderHero(){
     els.delta.className = S.rate < prev[1] ? 'good' : 'bad';
     els.delta.append(b, document.createTextNode(' from ' + fmtV(prev[1])));
   }
-  const best = bestSince(startOfLocalDay());
+  // with one rate a day, "today's best" is always today's rate — compare to the month instead
+  const best = bestSince(Date.now() - 30 * 864e5);
   els.offBest.replaceChildren(); els.offBest.className = '';
   if (best) {
     const off = (S.rate - best[1]) / best[1] * 100;
-    if (off < 0.005) { els.offBest.className = 'good'; els.offBest.textContent = '✓ at today’s best'; }
-    else { const b = document.createElement('b'); b.textContent = off.toFixed(2) + '%'; els.offBest.append(b, document.createTextNode(' above today’s best')); }
+    if (off < 0.005) { els.offBest.className = 'good'; els.offBest.textContent = '✓ best in 30 days'; }
+    else { const b = document.createElement('b'); b.textContent = off.toFixed(2) + '%'; els.offBest.append(b, document.createTextNode(' above the 30-day best')); }
   }
 }
+// The live interbank rate is an INPUT only — ICICI's published rate is the one the page shows.
+async function fetchMarket(){
+  const tries = [
+    ['https://api.fxratesapi.com/latest?base=AUD&currencies=INR', j => j?.success && +j.rates.INR],
+    ['https://api.coinbase.com/v2/exchange-rates?currency=AUD', j => +j?.data?.rates?.INR],
+  ];
+  for (const [url, pick] of tries) {
+    try {
+      const v = pick(await (await fetch(url, { cache: 'no-store' })).json());
+      if (isFinite(v) && v > 0) { S.mkt = v; S.mktAt = Date.now(); renderStats(); renderContext(); return; }
+    } catch {}
+  }
+}
+// ICICI publishes one rate each weekday morning IST; work out when the next one lands, in local time
+function nextSetTime(){
+  if (!S.ts) return null;
+  const last = new Date(S.ts), now = new Date();
+  const t = new Date(last);
+  while (t <= now || t.getDay() === 0 || t.getDay() === 6) t.setDate(t.getDate() + 1);
+  return t;
+}
+function renderNowcast(){
+  const m = S.margin;
+  if (!m || !S.mkt) { setVal(els.nowcast, null); els.nowcastCap.textContent = m ? 'market rate unavailable' : 'needs a few more days of data'; return; }
+  const est = S.mkt * (1 + m.pct / 100);
+  setVal(els.nowcast, est);
+  const when = nextSetTime();
+  const day = when ? (when.toDateString() === new Date().toDateString() ? 'today' : DAYS[when.getDay()]) : '';
+  els.nowcastCap.textContent = '±' + (S.unit === 'INR' ? m.mae.toFixed(2) : (m.mae / (S.mkt * S.mkt)).toFixed(5)) + (when ? ' · ' + day + ' ' + hhmm(when) : '');
+}
+function renderContext(){
+  const H = S.history;
+  if (!S.rate || H.length < 5) { els.ctx.hidden = true; return; }
+  els.ctx.hidden = false;
+  const cutoff = Date.now() - 90 * 864e5;
+  const window_ = H.filter(p => p[0] >= cutoff).map(p => p[1]);
+  const cheaper = window_.filter(v => v > S.rate).length;          // a HIGHER ₹/A$ is worse for you
+  const pct = Math.round(cheaper / window_.length * 100);
+  const days = Math.max(1, Math.round((Date.now() - H[0][0]) / 864e5));
+  els.ctx.replaceChildren();
+  const b = document.createElement('b');
+  b.textContent = pct >= 80 ? 'one of the better rates' : pct >= 55 ? 'a better-than-average rate' : pct >= 30 ? 'about average' : 'a worse-than-average rate';
+  els.ctx.append(document.createTextNode('Today is '), b,
+    document.createTextNode(' — cheaper than ' + pct + '% of the last ' + Math.min(days, 90) + ' days'));
+  if (S.margin && S.mkt) {
+    const est = S.mkt * (1 + S.margin.pct / 100), d = est - S.rate;
+    els.ctx.append(document.createTextNode('. The market has moved since ICICI last priced, so the next rate looks '
+      + (Math.abs(d) < S.margin.mae ? 'about the same' : d < 0 ? 'lower (better)' : 'higher (worse)') + '.'));
+  }
+}
+function renderEvents(){
+  fetch('events.json', { cache: 'no-store' }).then(r => r.json()).then(j => {
+    const today = new Date().toISOString().slice(0, 10);
+    const up = (j.events || []).filter(e => e.date >= today).slice(0, 5);
+    if (!up.length) return;
+    $('#eventsSec').hidden = false;
+    const box = $('#evs'); box.replaceChildren();
+    for (const e of up) {
+      const d = new Date(e.date + 'T12:00:00'), away = Math.round((d - new Date()) / 864e5);
+      const row = document.createElement('div'); row.className = 'ev' + (away <= 7 ? ' soon' : '');
+      const w = document.createElement('div'); w.className = 'when';
+      w.textContent = away <= 0 ? 'today' : away === 1 ? 'tomorrow' : d.getDate() + ' ' + MONTHS[d.getMonth()];
+      const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = e.name;
+      const sub = document.createElement('span'); sub.textContent = e.what; nm.append(sub);
+      const cur = document.createElement('span'); cur.className = 'cur'; cur.textContent = e.moves;
+      row.append(w, nm, cur); box.append(row);
+    }
+  }).catch(() => {});
+}
 function renderStats(){
-  const bd = bestSince(startOfLocalDay()), bh = bestSince(Date.now() - 3600e3);
-  setVal(els.bestDay, bd ? bd[1] : null); els.bestDayCap.textContent = bd ? 'set ' + hhmm(bd[2]) : (S.online ? 'no rate yet' : '');
-  setVal(els.bestHr, bh ? bh[1] : null); els.bestHrCap.textContent = bh ? 'set ' + hhmm(bh[2]) : '';
+  const bd = bestSince(Date.now() - 30 * 864e5);
+  setVal(els.bestDay, bd ? bd[1] : null);
+  if (bd) { const d = new Date(bd[2]); els.bestDayCap.textContent = d.getDate() + ' ' + MONTHS[d.getMonth()] + (bd[1] === S.rate ? ' · that’s today' : ''); }
+  else els.bestDayCap.textContent = S.online ? 'no rate yet' : '';
+  renderNowcast();
 }
 // converter
 const parseNum = s => { const n = parseFloat(String(s).replace(/[^0-9.]/g, '')); return isFinite(n) ? n : null; };
@@ -713,6 +804,8 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
   setUnit(S.unit); setRange(S.range);
   refresh();
   initPush();
+  fetchMarket(); setInterval(fetchMarket, 5 * 60e3);
+  renderEvents();
   setInterval(refresh, 20000);
   setInterval(renderLive, 1000);
   setInterval(() => { renderStats(); draw(); }, 60000);

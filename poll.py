@@ -47,6 +47,16 @@ def main():
     stamp = "%s (set %s IST)" % (icici.fmt_inr(rec["ttSell"]), icici.fmt_ist(rec["t"]))
     print(("new rate " if changed else "unchanged ") + stamp)
 
+    # refresh the market margin daily — the page uses it to estimate the next rate from the live market
+    margin = store.get("margin")
+    stale = not margin or time.time() * 1000 - margin.get("asOf", 0) > 20 * 3600_000
+    if changed or stale:
+        m = icici.estimate_margin(store["history"])
+        if m:
+            store["margin"] = m
+            changed = True
+            print("margin over market: %.2f%% (sd %.2f, +/-%.2f, n=%d)" % (m["pct"], m["sd"], m["mae"], m["n"]))
+
     if changed:
         icici.write_json(RATE_FILE, store)
         if prev is not None and prev[1] != rec["ttSell"] and settings["changes"]:

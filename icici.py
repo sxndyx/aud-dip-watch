@@ -190,6 +190,53 @@ def change_message(prev, rec, history):
     return title, body
 
 
+ECB_URL = "https://api.frankfurter.dev/v1/%s..?base=AUD&symbols=INR"
+
+
+def estimate_margin(history, days=120):
+    """How much ICICI's TT selling rate sits above the interbank mid-market rate.
+
+    ICICI publishes one rate each weekday morning and leaves it, so its rate is a stale
+    snapshot of a market that keeps moving. Knowing the margin lets the page turn the LIVE
+    market rate into an estimate of the next rate ICICI will set — which is measurably better
+    than assuming today's rate repeats. Returns None when there is not enough overlap yet.
+
+    `mae` is this estimator's own mean absolute error over the sample, so the page can show an
+    honest error bar rather than a bare number.
+    """
+    if len(history) < 4:
+        return None
+    start = dt.datetime.fromtimestamp(history[0][0] / 1000, dt.timezone.utc) - dt.timedelta(days=1)
+    try:
+        body = fetch_html(ECB_URL % start.strftime("%Y-%m-%d"), timeout=25)
+        mkt = {d: v["INR"] for d, v in json.loads(body)["rates"].items() if v.get("INR")}
+    except Exception:
+        return None
+
+    cutoff = dt.datetime.now(dt.timezone.utc).timestamp() * 1000 - days * 86400_000
+    pairs = []
+    for t, tt, _card in history:
+        if t < cutoff:
+            continue
+        day = dt.datetime.fromtimestamp(t / 1000, IST).strftime("%Y-%m-%d")
+        if day in mkt:
+            pairs.append((mkt[day], tt))
+    if len(pairs) < 4:
+        return None
+
+    margins = [(tt / m - 1) * 100 for m, tt in pairs]
+    mean = sum(margins) / len(margins)
+    var = sum((x - mean) ** 2 for x in margins) / len(margins)
+    errs = [abs(m * (1 + mean / 100) - tt) for m, tt in pairs]
+    return {
+        "pct": round(mean, 3),
+        "sd": round(var ** 0.5, 3),
+        "mae": round(sum(errs) / len(errs), 3),
+        "n": len(pairs),
+        "asOf": int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000),
+    }
+
+
 def web_push(app_url, push_key, title, body, tag="rate"):
     """Ask the app's own /api/push to notify every phone registered in the web app."""
     if not app_url or not push_key:

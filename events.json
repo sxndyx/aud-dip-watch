@@ -1,0 +1,21 @@
+{
+  "note": "Scheduled events that historically move AUD/INR. Dates are published in advance by each institution. Not predictions — they mark when movement is likely. Re-check each calendar when it rolls over (RBI publishes per financial year, RBA per calendar year).",
+  "sources": {
+    "RBI MPC": "https://www.rbi.org.in — FY2026-27 calendar announced 23 Mar 2026",
+    "RBA": "https://www.rba.gov.au/schedules-events/board-meeting-schedules.html",
+    "India CPI": "https://www.mospi.gov.in — released 12th of each month, 17:30 IST (next working day if a holiday)"
+  },
+  "events": [
+    { "date": "2026-11-03", "name": "RBA rate decision", "what": "Reserve Bank of Australia announces its cash rate decision (2:30pm AEDT).", "moves": "AUD" },
+    { "date": "2026-11-12", "name": "India CPI", "what": "Indian inflation data for October.", "moves": "INR" },
+    { "date": "2026-12-04", "name": "RBI rate decision", "what": "Reserve Bank of India MPC decision (meeting runs 2–4 Dec).", "moves": "INR" },
+    { "date": "2026-12-08", "name": "RBA rate decision", "what": "Reserve Bank of Australia announces its cash rate decision (2:30pm AEDT).", "moves": "AUD" },
+    { "date": "2026-12-14", "name": "India CPI", "what": "Indian inflation data for November.", "moves": "INR" },
+    { "date": "2027-01-12", "name": "India CPI", "what": "Indian inflation data for December.", "moves": "INR" },
+    { "date": "2027-02-05", "name": "RBI rate decision", "what": "Reserve Bank of India MPC decision (meeting runs 3–5 Feb).", "moves": "INR" },
+    { "date": "2027-02-09", "name": "RBA rate decision", "what": "Reserve Bank of Australia announces its cash rate decision (2:30pm AEDT).", "moves": "AUD" },
+    { "date": "2027-02-12", "name": "India CPI", "what": "Indian inflation data for January.", "moves": "INR" },
+    { "date": "2027-03-12", "name": "India CPI", "what": "Indian inflation data for February.", "moves": "INR" },
+    { "date": "2027-03-23", "name": "RBA rate decision", "what": "Reserve Bank of Australia announces its cash rate decision (2:30pm AEDT).", "moves": "AUD" }
+  ]
+}

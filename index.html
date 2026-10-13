@@ -421,7 +421,13 @@ function renderLive(){
   if (S.online === null) txt = 'connecting';
   else if (!S.online) { cls = 'bad'; txt = 'server unreachable' + (S.lastSeen ? ' · last ' + hhmm(S.lastSeen) : ''); }
   else if (S.error) { cls = 'warn'; txt = 'ICICI unreachable · last good rate shown'; }
-  else if (S.static) { cls = 'ok'; txt = S.ts ? 'rate set ' + hhmm(S.ts) : 'waiting for ICICI'; }
+  else if (S.static) {
+    // a frozen rate looks identical to a quiet market — say so rather than let it mislead
+    const age = S.ts ? (Date.now() - S.ts) / 864e5 : null;
+    if (age != null && age > 3) { cls = 'bad'; txt = 'stale · no update in ' + Math.floor(age) + ' days'; }
+    else if (age != null && age > 1.6) { cls = 'warn'; txt = 'rate set ' + DAYS[new Date(S.ts).getDay()] + ' ' + hhmm(S.ts); }
+    else { cls = 'ok'; txt = S.ts ? 'rate set ' + hhmm(S.ts) : 'waiting for ICICI'; }
+  }
   else { const age = S.fetchedAt ? (Date.now() - S.fetchedAt) / 1000 : null; cls = age != null && age < 12 * 60 ? 'ok' : 'warn'; txt = age == null ? 'waiting for ICICI' : 'checked ' + (age < 60 ? Math.max(0, Math.round(age)) + 's' : Math.round(age / 60) + ' min') + ' ago'; }
   els.live.className = 'live ' + cls; els.liveTxt.textContent = txt;
 }

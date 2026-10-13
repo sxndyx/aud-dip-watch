@@ -20,6 +20,8 @@ import ssl
 import threading
 import time
 import urllib.request
+
+import icici
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -103,44 +105,12 @@ def ssl_context():
 SSL_CTX = ssl_context()
 
 
-# ---------- ICICI card rate
-def parse_card_rate(html):
-    """Return {'t', 'ttBuy', 'cardBuy', 'ttSell', 'cardSell', 'ddSell'} for AUD from ICICI's page."""
-    md = re.search(r"Date:\s*(?:</?\w+[^>]*>\s*)*(\d{2})-(\d{2})-(\d{4})", html)
-    mt = re.search(r"Time:\s*(?:</?\w+[^>]*>\s*)*(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)", html, re.I)
-    if not md or not mt:
-        raise ValueError("rate timestamp not found")
-    d, mo, y = md.groups()
-    h, mi, s, ampm = mt.groups()
-    h = int(h) % 12 + (12 if ampm.upper() == "PM" else 0)
-    when = dt.datetime(int(y), int(mo), int(d), h, int(mi), int(s), tzinfo=IST)
-
-    i = html.find("Australian Dollar (AUD)")
-    if i < 0:
-        raise ValueError("AUD row not found")
-    row = html[html.rfind("<tr", 0, i):html.find("</tr>", i)]
-    cells = [re.sub(r"<[^>]+>", "", c).strip() for c in re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)]
-    # Columns: currency, [buy] TT, bills, notes, card, DD, [sell] TT, bills, notes, card, DD
-    if len(cells) < 10:
-        raise ValueError("unexpected AUD row shape: %r" % cells)
-
-    def num(x):
-        return float(x) if re.fullmatch(r"\d+(\.\d+)?", x) else None
-
-    rec = {"t": int(when.timestamp() * 1000), "ttBuy": num(cells[1]), "cardBuy": num(cells[4]),
-           "ttSell": num(cells[6]), "cardSell": num(cells[9]), "ddSell": num(cells[10]) if len(cells) > 10 else None}
-    if rec["ttSell"] is None:
-        raise ValueError("TT selling rate missing: %r" % cells)
-    return rec
-
+# ---------- ICICI card rate — fetching and parsing live in icici.py, shared with poll.py
 
 def poll_icici():
     ic = state["icici"]
     try:
-        req = urllib.request.Request(ICICI_URL, headers={"User-Agent": UA, "Accept": "text/html"})
-        with urllib.request.urlopen(req, timeout=30, context=SSL_CTX) as r:
-            html = r.read().decode("utf-8", "ignore")
-        rec = parse_card_rate(html)
+        rec = icici.parse_card_rate(icici.fetch_html(bust=True))
     except Exception as e:  # network, HTTP or layout change: keep the last good value, report the error
         with lock:
             ic["error"] = "%s: %s" % (type(e).__name__, e)

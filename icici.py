@@ -59,11 +59,17 @@ def write_json(path, obj, indent=None):
 
 
 # ---------- the rate
-def fetch_html(url=ICICI_URL, timeout=30):
+def fetch_html(url=ICICI_URL, timeout=30, bust=False):
+    """bust=True appends a cache-buster: something in front of icici.bank.in serves a cached
+    copy for the bare URL (observed a day-old rate), despite its no-store header."""
+    if bust:
+        url += ("&" if "?" in url else "?") + "cb=%d" % int(dt.datetime.now(dt.timezone.utc).timestamp())
     req = urllib.request.Request(url, headers={
         "User-Agent": UA,
         "Accept": "text/html,application/xhtml+xml",
         "Accept-Language": "en-AU,en;q=0.9",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
     })
     with urllib.request.urlopen(req, timeout=timeout, context=SSL_CTX) as r:
         return r.read().decode("utf-8", "ignore")
@@ -74,34 +80,106 @@ def parse_card_rate(html):
 
     'ttSell' is the TT selling rate — what an outward INR->AUD transfer is priced at.
     't' is ICICI's own "rate set at" timestamp (published in IST), as epoch milliseconds.
+
+    Columns are located by their HEADING, never by position: ICICI reshuffled this table in
+    Oct 2026 (dropping a column, which shifted TT Selling from index 6 to 5). A fixed index
+    would have silently returned the wrong rate, so a layout change must fail loudly instead.
     """
-    md = re.search(r"Date:\s*(?:</?\w+[^>]*>\s*)*(\d{2})-(\d{2})-(\d{4})", html)
-    mt = re.search(r"Time:\s*(?:</?\w+[^>]*>\s*)*(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)", html, re.I)
-    if not md or not mt:
-        raise ValueError("rate timestamp not found")
-    d, mo, y = md.groups()
-    h, mi, s, ampm = mt.groups()
-    h = int(h) % 12 + (12 if ampm.upper() == "PM" else 0)
-    when = dt.datetime(int(y), int(mo), int(d), h, int(mi), int(s), tzinfo=IST)
+    when = _parse_timestamp(html)
+    row, header = _find_currency_row(html, "Australian Dollar (AUD)")
+    cells = _cells(row)
+    labels = _cells(header)
 
-    i = html.find("Australian Dollar (AUD)")
-    if i < 0:
-        raise ValueError("AUD row not found")
-    row = html[html.rfind("<tr", 0, i):html.find("</tr>", i)]
-    cells = [re.sub(r"<[^>]+>", "", c).strip() for c in re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)]
-    # Columns: currency, [buy] TT, bills, notes, card, DD, [sell] TT, bills, notes, card, DD
-    if len(cells) < 10:
-        raise ValueError("unexpected AUD row shape: %r" % cells)
+    def col(*names, side=None):
+        """Index of the first heading matching one of `names`, optionally on the buy/sell side."""
+        for i, lab in enumerate(labels):
+            low = lab.lower()
+            if any(n in low for n in names):
+                if side == "buy" and "sell" in low:
+                    continue
+                if side == "sell" and "sell" not in low and "buy" in low:
+                    continue
+                return i
+        return None
 
-    def num(x):
+    # the heading row has no cell for the currency name, so values sit one to the right
+    def val(idx):
+        if idx is None or idx + 1 >= len(cells):
+            return None
+        x = cells[idx + 1]
         return float(x) if re.fullmatch(r"\d+(\.\d+)?", x) else None
 
-    rec = {"t": int(when.timestamp() * 1000), "ttBuy": num(cells[1]), "cardBuy": num(cells[4]),
-           "ttSell": num(cells[6]), "cardSell": num(cells[9]),
-           "ddSell": num(cells[10]) if len(cells) > 10 else None}
-    if rec["ttSell"] is None:
-        raise ValueError("TT selling rate missing: %r" % cells)
-    return rec
+    sell_from = next((i for i, l in enumerate(labels) if "sell" in l.lower()), None)
+    if sell_from is None:
+        raise ValueError("no selling-rate column found; headings: %r" % labels)
+    buy_labels = labels[:sell_from]
+
+    tt_sell = val(next((i for i, l in enumerate(labels) if i >= sell_from and "tt" in l.lower()), None))
+    card_sell = val(next((i for i, l in enumerate(labels) if i >= sell_from and "card" in l.lower()), None))
+    tt_buy = val(next((i for i, l in enumerate(buy_labels) if "tt" in l.lower()), None))
+    card_buy = val(next((i for i, l in enumerate(buy_labels) if "card" in l.lower()), None))
+
+    if tt_sell is None:
+        raise ValueError("TT selling rate not found; headings=%r cells=%r" % (labels, cells))
+    # a transfer rate far from the buying rate, or an implausible level, means we misread the table
+    if tt_buy is not None and not (tt_buy < tt_sell < tt_buy * 1.25):
+        raise ValueError("TT selling %.2f is implausible against TT buying %.2f" % (tt_sell, tt_buy))
+    if not 1 < tt_sell < 1000:
+        raise ValueError("TT selling %.4f is out of range" % tt_sell)
+
+    dd_sell = val(next((i for i, l in enumerate(labels) if i >= sell_from and "demand draft" in l.lower()), None))
+    return {"t": int(when.timestamp() * 1000), "ttBuy": tt_buy, "cardBuy": card_buy,
+            "ttSell": tt_sell, "cardSell": card_sell, "ddSell": dd_sell}
+
+
+def _cells(row_html):
+    out = []
+    for m in re.finditer(r"<t([hd])[^>]*>(.*?)</t\1>", row_html, re.S):
+        out.append(_text(m.group(2)))
+    return out
+
+
+def _text(frag):
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", frag)).replace("&nbsp;", " ").strip()
+
+
+def _parse_timestamp(html):
+    """ICICI's 'rate set at' time, in IST. Handles both the current and the pre-Oct-2026 layout."""
+    # current: <div id="date-field">13-10-2026</div> ... <div id="timestamp">09:13:41 AM</div>
+    md = re.search(r'id="date-field"[^>]*>\s*(\d{2})-(\d{2})-(\d{4})', html)
+    mt = re.search(r'id="timestamp"[^>]*>\s*(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)', html, re.I)
+    if not (md and mt):
+        # older layout: <strong>Date:</strong> 22-09-2026 ... <strong>Time:</strong> 09:15:47 AM
+        md = re.search(r"Date:\s*(?:</?\w+[^>]*>\s*)*(\d{2})-(\d{2})-(\d{4})", html)
+        mt = re.search(r"Time:\s*(?:</?\w+[^>]*>\s*)*(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)", html, re.I)
+    if not (md and mt):
+        raise ValueError("rate timestamp not found")
+    d, mo, y = md.groups()
+    h, mi, sec, ampm = mt.groups()
+    h = int(h) % 12 + (12 if ampm.upper() == "PM" else 0)
+    return dt.datetime(int(y), int(mo), int(d), h, int(mi), int(sec), tzinfo=IST)
+
+
+def _find_currency_row(html, label):
+    """The table row for `label`, plus the heading row above it.
+
+    The currency name also appears in a filter dropdown, so match a real <tr> with numbers in it.
+    """
+    rows = [(m.start(), m.group(1)) for m in re.finditer(r"<tr[^>]*>(.*?)</tr>", html, re.S)]
+    target = None
+    for i, (_pos, r) in enumerate(rows):
+        cells = _cells(r)
+        if cells and label in cells[0] and sum(bool(re.fullmatch(r"\d+(\.\d+)?", c)) for c in cells) >= 4:
+            target = i
+            break
+    if target is None:
+        raise ValueError("%s row not found in any rate table" % label)
+    # the nearest preceding row that names the rate columns
+    for j in range(target - 1, -1, -1):
+        labels = _cells(rows[j][1])
+        if any("sell" in l.lower() for l in labels) and any("tt" in l.lower() for l in labels):
+            return rows[target][1], rows[j][1]
+    raise ValueError("heading row with TT/selling columns not found above the %s row" % label)
 
 
 def append_change(store, rec):

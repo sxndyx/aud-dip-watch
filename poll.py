@@ -38,7 +38,7 @@ def main():
     settings = {"changes": True, "hourly": False, **doc.get("settings", {})}
 
     try:
-        rec = icici.parse_card_rate(icici.fetch_html())
+        rec = icici.parse_card_rate(icici.fetch_html(bust=True))
     except Exception as e:
         print("FAILED to read ICICI: %s: %s" % (type(e).__name__, e))
         return 1

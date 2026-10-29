@@ -9,7 +9,7 @@ Environment:
   NTFY_SERVER   (default https://ntfy.sh)
   APP_URL       (optional)          the deployed app: link on pushes, and where web push is sent
   PUSH_KEY      (optional)          shared secret for the app's /api/push (web app notifications)
-  HOURLY        (optional)          set to "1" by the hourly workflow run
+  HOURLY        (optional)          force the hourly push; otherwise the last slot of the hour
 
 Exit code is 0 unless ICICI could not be read, so a failed run is visible in Actions.
 """
@@ -66,7 +66,10 @@ def main():
             ok, info = icici.web_push(click, os.environ.get("PUSH_KEY", "").strip(), title, body)
             print("web push  -> " + info)
 
-    if os.environ.get("HOURLY") == "1" and settings["hourly"]:
+    # the hourly push belongs to the last polling slot of each hour; deriving it from the clock
+    # means one cron entry instead of two overlapping ones
+    hourly_slot = os.environ.get("HOURLY") == "1" or dt.datetime.now(dt.timezone.utc).minute >= 45
+    if hourly_slot and settings["hourly"]:
         ok, info = icici.ntfy_send(cfg, "Hourly: ICICI AUD %.2f INR" % rec["ttSell"],
                                    icici.hourly_body(rec, store["history"]),
                                    priority="low", tags="clock3", click=click)

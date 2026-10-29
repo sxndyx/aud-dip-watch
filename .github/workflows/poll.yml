@@ -1,17 +1,19 @@
 name: Poll ICICI rate
 
 on:
+  # One schedule only. A second entry for the hourly slot collided with this one at :52 —
+  # two runs, same commit, and the loser's push was rejected. poll.py decides the hourly slot
+  # from the clock instead. Off the hour, where GitHub's scheduler is least delayed.
   schedule:
-    - cron: '7,22,37,52 * * * *'  # every 15 min, off the hour (GitHub delays on-the-hour runs most)
-    - cron: '52 * * * *'          # hourly slot: same poll, plus the hourly push when enabled
-  workflow_dispatch:              # lets you run it by hand from the Actions tab
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
 
 concurrency:
-  group: poll                     # never two runs at once - they would fight over the commit
+  group: poll
   cancel-in-progress: false
 
 permissions:
-  contents: write                 # to commit the rate history back to the repo
+  contents: write
 
 jobs:
   poll:
@@ -27,16 +29,26 @@ jobs:
           NTFY_SERVER: ${{ vars.NTFY_SERVER }}
           APP_URL: ${{ vars.APP_URL }}
           PUSH_KEY: ${{ secrets.PUSH_KEY }}
-          HOURLY: ${{ github.event.schedule == '52 * * * *' && '1' || '0' }}
         run: python poll.py
       - name: Commit any change
         run: |
-          if [ -n "$(git status --porcelain rate.json alerts.json)" ]; then
-            git config user.name  "aud-dip-watch"
-            git config user.email "actions@users.noreply.github.com"
-            git add rate.json alerts.json
-            git commit -m "rate: $(python -c "import json;print(json.load(open('rate.json'))['latest']['ttSell'])")"
-            git push
-          else
-            echo "nothing to commit"
+          if [ -z "$(git status --porcelain rate.json alerts.json)" ]; then
+            echo "nothing to commit"; exit 0
           fi
+          git config user.name  "aud-dip-watch"
+          git config user.email "actions@users.noreply.github.com"
+          git add rate.json alerts.json
+          git commit -m "rate: $(python -c "import json;print(json.load(open('rate.json'))['latest']['ttSell'])")"
+          # a manual run, or a push from the Mac, can land between our checkout and our push
+          for attempt in 1 2 3; do
+            if git push; then exit 0; fi
+            echo "push rejected (attempt $attempt) — rebasing onto the newer commit"
+            if ! git pull --rebase origin main; then
+              # both sides read the same ICICI page minutes apart, so neither is authoritative:
+              # drop ours and let the next run (<=15 min) re-read and commit if it still differs
+              git rebase --abort || true
+              echo "concurrent update conflicts with ours; leaving it to the next run"
+              exit 0
+            fi
+          done
+          echo "could not push after 3 attempts"; exit 1
